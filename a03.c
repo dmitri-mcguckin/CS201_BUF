@@ -22,8 +22,15 @@ int main(int argc, char **argv)
 	pipe(pipeIntoChild);
 	pipe(pipeOutOfChild);
 
+    #define ParentRead      pipeOutOfChild[0]
+    #define ParentWrite     pipeIntoChild[1]
+    #define ChildRead       pipeIntoChild[0]
+    #define ChildWrite      pipeOutOfChild[1]
+
 	system("clear");
 	printf("CS201 - Assignment 3 Regular - Dmitri McGuckin\n");
+
+    printf("INTO: %i %i\nOUTOF: %i %i\n", ParentRead, ParentWrite, ChildRead, ChildWrite);
 
 	// set up fork
 	pid = fork();
@@ -40,22 +47,25 @@ int main(int argc, char **argv)
 			int in, out, sum = 0;
 			printf("\nPARENT PID: %d\n-->CHILD PID: %d\n", getppid(), getpid());
 
-			close(pipeOutOfChild[0]);
-			in = pipeIntoChild[0];
-			out = pipeOutOfChild[1];
-			close(pipeIntoChild[1]);
+            close(ParentRead);
+            close(ParentWrite);
 
 			// Receive characters from parent process via pipe
 			// one at a time, and count them.
 
-			int temp;
-			printf("Begin Reading!\n");
-			read(in,&temp, BSIZE);
-			printf("Read: %c\n", temp);
+            int thing;
 
+            for (int i = 0; i < 20; i++)
+            {
+                printf("Reading from pipe end: %i\n", in);
+                read(ChildRead, &thing, BSIZE);
+                printf("CHILD READ: %i\n", thing);
+            }
 
-			close(in);
-			close(out);
+            printf("Writing to pipe end: %i\n", out);
+
+            close(ChildRead);
+			close(ChildWrite);
 
 			// Return sum of numbers.
 			return sum;
@@ -74,17 +84,15 @@ int main(int argc, char **argv)
 				printf("Converted Parameter: %i\n", list[i]);
 			}
 
-			close(pipeIntoChild[0]);
-			in = pipeOutOfChild[0];
-			out = pipeIntoChild[1];
-			close(pipeOutOfChild[1]);
+			close(ChildRead);
+            close(ChildWrite);
 
 			// Send numbers (datatype: int, 4 bytes) from command line arguments
 			// starting with argv[1] one at a time through pipe to child process.
 
 			for (int i = 1; i < argc; i++)
 			{
-				write(out, list[i], BSIZE);
+				write(ParentWrite, list[i], BSIZE);
 				printf("Written to Pipe: %i\n", list[i]);
 			}
 
