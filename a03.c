@@ -30,8 +30,6 @@ int main(int argc, char **argv)
 	system("clear");
 	printf("CS201 - Assignment 3 Regular - Dmitri McGuckin\n");
 
-    printf("INTO: %i %i\nOUTOF: %i %i\n", ParentRead, ParentWrite, ChildRead, ChildWrite);
-
 	// set up fork
 	pid = fork();
 
@@ -45,7 +43,6 @@ int main(int argc, char **argv)
 	{
 			// -- running in child process --
 			int in, out, sum = 0;
-			printf("\nPARENT PID: %d\n-->CHILD PID: %d\n", getppid(), getpid());
 
             close(ParentRead);
             close(ParentWrite);
@@ -58,17 +55,13 @@ int main(int argc, char **argv)
 	    do
             {
                 read(ChildRead, &thing, BSIZE);
-                printf("CHILD READ: %i\n", thing);
 		sum += thing;
 		count++;
             } while(thing != 0);
 
-            printf("Pipe has been emptied!\nLocal Sum = %i\n", sum);
-
-
-		if(count > 4)
+		if(count != 5)
 		{
-			printf("Error in the data!\n");
+			printf("Error in the data!\nCount: %i\n", count);
 			exit(-1);
 		}
             close(ChildRead);
@@ -81,7 +74,6 @@ int main(int argc, char **argv)
 	{
 			// -- running in parent process --
 		int status, sum = 0;
-			printf("\n-->PARENT PID: %d\nCHILD PID: %d\n", getpid(), pid);
 
 			int list[argc];
 
@@ -94,16 +86,13 @@ int main(int argc, char **argv)
 			for (int i = 1; i < argc; i++)
 			{
 				list[i] = atoi(argv[i]);
-				printf("Converted parameter: %i\n", list[i]);
 				write(ParentWrite, &list[i], BSIZE);
-				printf("Written to Pipe: %i\n", list[i]);
 			}
 
 			// Wait for child process to return. Reap child process.
 			// Receive sum of numbers via the value returned when
 			// the child process is reaped.
 			waitpid(pid, &status, NOHANG);
-			printf("Status: %i\n", status);	
 
 			close(ParentRead);
 			close(ParentWrite);
