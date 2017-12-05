@@ -16,7 +16,7 @@
 int main(int argc, char **argv)
 {
 	pid_t pid;
-	int status, pipeIntoChild[2], pipeOutOfChild[2];
+	int pipeIntoChild[2], pipeOutOfChild[2];
 
 	// set up pipe
 	pipe(pipeIntoChild);
@@ -53,17 +53,24 @@ int main(int argc, char **argv)
 			// Receive characters from parent process via pipe
 			// one at a time, and count them.
 
-            int thing;
+            int thing, count = 0;
 
-            for (int i = 0; i < 20; i++)
+	    do
             {
-                printf("Reading from pipe end: %i\n", in);
                 read(ChildRead, &thing, BSIZE);
                 printf("CHILD READ: %i\n", thing);
-            }
+		sum += thing;
+		count++;
+            } while(thing != 0);
 
-            printf("Writing to pipe end: %i\n", out);
+            printf("Pipe has been emptied!\nLocal Sum = %i\n", sum);
 
+
+		if(count > 4)
+		{
+			printf("Error in the data!\n");
+			exit(-1);
+		}
             close(ChildRead);
 			close(ChildWrite);
 
@@ -73,16 +80,10 @@ int main(int argc, char **argv)
 	else
 	{
 			// -- running in parent process --
-			int in, out, sum = 0;
+		int status, sum = 0;
 			printf("\n-->PARENT PID: %d\nCHILD PID: %d\n", getpid(), pid);
 
 			int list[argc];
-
-			for (int i = 1; i < argc; i++)
-			{
-				list[i] = atoi(argv[i]);
-				printf("Converted Parameter: %i\n", list[i]);
-			}
 
 			close(ChildRead);
             close(ChildWrite);
@@ -92,17 +93,20 @@ int main(int argc, char **argv)
 
 			for (int i = 1; i < argc; i++)
 			{
-				write(ParentWrite, list[i], BSIZE);
+				list[i] = atoi(argv[i]);
+				printf("Converted parameter: %i\n", list[i]);
+				write(ParentWrite, &list[i], BSIZE);
 				printf("Written to Pipe: %i\n", list[i]);
 			}
 
 			// Wait for child process to return. Reap child process.
 			// Receive sum of numbers via the value returned when
 			// the child process is reaped.
-			waitpid(pid,status,NOHANG);
+			waitpid(pid, &status, NOHANG);
+			printf("Status: %i\n", status);	
 
-			close(in);
-			close(out);
+			close(ParentRead);
+			close(ParentWrite);
 
 			printf("sum = %d\n", sum);
 			return 0;
