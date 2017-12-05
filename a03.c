@@ -9,9 +9,10 @@
 
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
-#define NOHANG 0
 #define BSIZE 4
+#define REGEXIT 65280
 
 int main(int argc, char **argv)
 {
@@ -22,82 +23,95 @@ int main(int argc, char **argv)
 	pipe(pipeIntoChild);
 	pipe(pipeOutOfChild);
 
-    #define ParentRead      pipeOutOfChild[0]
-    #define ParentWrite     pipeIntoChild[1]
-    #define ChildRead       pipeIntoChild[0]
-    #define ChildWrite      pipeOutOfChild[1]
+	// Redefine all of the pipe ends before compile time
+	#define ParentRead      pipeOutOfChild[0]
+	#define ParentWrite     pipeIntoChild[1]
+	#define ChildRead       pipeIntoChild[0]
+	#define ChildWrite      pipeOutOfChild[1]
 
 	system("clear");
 	printf("CS201 - Assignment 3 Regular - Dmitri McGuckin\n");
 
-	// set up fork
+	// Set up the fork
 	pid = fork();
 
-	if (pid < 0)
+	if (pid < 0) // Error in the child forking
 	{
-		// -- child return error --
-		perror("There was a fork error!\na03p will now exit!\n");
+		printf("The child process for PID(%i) did not fork correctly!\n", pid);
 		exit(-1);
 	}
 	else if (pid == 0)
 	{
-			// -- running in child process --
-			int in, out, sum = 0;
+		// The Child Process
+		int sum = 0, count = 0, temp;
 
-            close(ParentRead);
-            close(ParentWrite);
+		// Close unused pipe ends
+		close(ParentRead);
+		close(ParentWrite);
 
-			// Receive characters from parent process via pipe
-			// one at a time, and count them.
-
-            int thing, count = 0;
-
-	    do
-            {
-                read(ChildRead, &thing, BSIZE);
-		sum += thing;
-		count++;
-            } while(thing != 0);
-
-		if(count != 5)
+		do // Read in arguments passed from the shell via the pipe untill it reads a zero
 		{
-			printf("Error in the data!\nCount: %i\n", count);
-			exit(-1);
-		}
-            close(ChildRead);
-			close(ChildWrite);
+			read(ChildRead, &temp, BSIZE);
+			sum += temp;
+			count++; // Count the number of arguments that were passed in
+		} while(temp != 0);
 
-			// Return sum of numbers.
-			return sum;
+		count--; // Decrement the counter to disclude zero
+
+		// If the shell passed in an odd number of arguments, kill the child
+		if((count % 2) != 0)
+		{
+			printf("Error in the data\n");
+			return -1;
+		}
+
+		// Calculate the average of the inputs
+		sum /= count;
+
+		// Write the average back into the pipe
+		write(ChildWrite, &sum, BSIZE);
+
+		// Close the rest of the pipe ends
+		close(ChildRead);
+		close(ChildWrite);
+
+		// printf("RETURNING(%i)\n", sum); // Optional Debug Info
+
+		return sum; // Return sum of numbers
 	}
 	else
 	{
-			// -- running in parent process --
-		int status, sum = 0;
+		// The Parrent Process
+		int list[argc], average, status;
 
-			int list[argc];
+		// Close unused pipe ends
+		close(ChildRead);
+		close(ChildWrite);
 
-			close(ChildRead);
-            close(ChildWrite);
-
-			// Send numbers (datatype: int, 4 bytes) from command line arguments
-			// starting with argv[1] one at a time through pipe to child process.
-
-			for (int i = 1; i < argc; i++)
-			{
-				list[i] = atoi(argv[i]);
-				write(ParentWrite, &list[i], BSIZE);
-			}
-
-			// Wait for child process to return. Reap child process.
-			// Receive sum of numbers via the value returned when
-			// the child process is reaped.
-			waitpid(pid, &status, NOHANG);
-
-			close(ParentRead);
-			close(ParentWrite);
-
-			printf("sum = %d\n", sum);
-			return 0;
+		// Convert all of the shell arguments from characters to ints
+		// Then write in all of the arguments into the pipe
+		for (int i = 1; i < argc; i++)
+		{
+			list[i] = atoi(argv[i]);
+			write(ParentWrite, &list[i], BSIZE);
 		}
+
+		// Reap the child process and record the status
+		waitpid(pid, &status, 0);
+
+		// printf("The child process for PID(%i) was reaped with status(%i)\n", pid, status); // Optional Debug Info
+
+		read(ParentRead, &average, BSIZE);
+
+		if(status != REGEXIT) // If the child exited normally, print the average
+		{
+			printf("average = %d\n", average);
+		}
+
+		// Close the rest of the pipe ends
+		close(ParentRead);
+		close(ParentWrite);
+
+		return 0;
+	}
 }
