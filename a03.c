@@ -9,61 +9,109 @@
 
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/wait.h>
+
+#define BSIZE 4
+#define REGEXIT 65280
 
 int main(int argc, char **argv)
 {
-	int list[4];
-	int pipe1[2];
-	int pipe2[2];
-	int num = argc - 2;
-
-	for(int i = 0; i < num; i++)
-	{
-		list[i] = atoi(argv[i+1]);
-		//printf("%i ",list[i]);
-	}
-	//printf("\n");
+	pid_t pid;
+	int pipeIntoChild[2], pipeOutOfChild[2];
 
 	// set up pipe
-	pipe(pipe1);
-	pipe(pipe2);
+	pipe(pipeIntoChild);
+	pipe(pipeOutOfChild);
 
-	//printf("Pipe 1: %i, %i\nPipe 2: %i, %i\n", pipe1[0], pipe1[1], pipe2[0], pipe2[1]);
+	// Redefine all of the pipe ends before compile time
+	#define ParentRead      pipeOutOfChild[0]
+	#define ParentWrite     pipeIntoChild[1]
+	#define ChildRead       pipeIntoChild[0]
+	#define ChildWrite      pipeOutOfChild[1]
 
-	// call fork()
-	int pid = fork();
-
+	system("clear");
 	printf("CS201 - Assignment 3 Regular - Dmitri McGuckin\n");
 
-	if (pid == 0)
+	// Set up the fork
+	pid = fork();
+
+	if (pid < 0) // Error in the child forking
 	{
-			// -- running in child process --
-			int     sum = 0;
+		printf("The child process for PID(%i) did not fork correctly!\n", pid);
+		exit(-1);
+	}
+	else if (pid == 0)
+	{
+		// The Child Process
+		int sum = 0, count = 0, temp;
 
-			printf("Congratulations! You're in the child process now!\n");
-			dup2(pipe1[1],STDOUT_FILENO);
-			close(pipe1[1]);
-			close(pipe1[0]);
-			dup2(pipe2[0],STDIN_FILENO);
-			// Receive characters from parent process via pipe
-			// one at a time, and count them.
+		// Close unused pipe ends
+		close(ParentRead);
+		close(ParentWrite);
 
-			// Return sum of numbers.
-			return sum;
+		do // Read in arguments passed from the shell via the pipe untill it reads a zero
+		{
+			read(ChildRead, &temp, BSIZE);
+			sum += temp;
+			count++; // Count the number of arguments that were passed in
+		} while(temp != 0);
+
+		count--; // Decrement the counter to disclude zero
+
+		// If the shell passed in an odd number of arguments, kill the child
+		if((count % 2) != 0)
+		{
+			printf("Error in the data\n");
+			return -1;
+		}
+
+		// Calculate the average of the inputs
+		sum /= count;
+
+		// Write the average back into the pipe
+		write(ChildWrite, &sum, BSIZE);
+
+		// Close the rest of the pipe ends
+		close(ChildRead);
+		close(ChildWrite);
+
+		// printf("RETURNING(%i)\n", sum); // Optional Debug Info
+
+		return sum; // Return sum of numbers
 	}
 	else
 	{
-			// -- running in parent process --
-			int sum = 0;
+		// The Parrent Process
+		int list[argc], average, status;
 
-			// Send numbers (datatype: int, 4 bytes) from command line arguments
-			// starting with argv[1] one at a time through pipe to child process.
+		// Close unused pipe ends
+		close(ChildRead);
+		close(ChildWrite);
 
-			// Wait for child process to return. Reap child process.
-			// Receive sum of numbers via the value returned when
-			// the child process is reaped.
-
-			printf("sum = %d\n", sum);
-			return 0;
+		// Convert all of the shell arguments from characters to ints
+		// Then write in all of the arguments into the pipe
+		for (int i = 1; i < argc; i++)
+		{
+			list[i] = atoi(argv[i]);
+			write(ParentWrite, &list[i], BSIZE);
 		}
+
+		// Reap the child process and record the status
+		waitpid(pid, &status, 0);
+
+		// printf("The child process for PID(%i) was reaped with status(%i)\n", pid, status); // Optional Debug Info
+
+		read(ParentRead, &average, BSIZE);
+
+		if(status != REGEXIT) // If the child exited normally, print the average
+		{
+			printf("average = %d\n", average);
+		}
+
+		// Close the rest of the pipe ends
+		close(ParentRead);
+		close(ParentWrite);
+
+		return 0;
+	}
 }
