@@ -20,10 +20,18 @@ f: $(OBJ)
 	clear
 	$(CC) $(CFLAGS) -lm -o $(EXE) $^
 	rm -f *.o
-	./$(EXE) 11 22 33 44 0 
+	./$(EXE) 11 22 33 44 0
 
 o: $(OBJ)
 	clear
 	clear
 	$(CC) -g -c $(OBJ)
 	objdump -d -M intel -S obj.c
+
+clean:
+	clear
+	clear
+	rm -f *.o
+	rm -f a03p
+	rm -f ao3_solution
+	rm -f *.txt
